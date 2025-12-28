@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Crypto Platform</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="card">
+            <div class="card-header text-center">
+                Crypto Platform
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginForm">
+                <h3 class="mb-2">Login</h3>
+                <div id="loginError" style="color: #e74c3c; font-size: 0.9rem; margin-bottom: 1rem; display: none;"></div>
+                <form onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" class="form-control" id="loginUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" class="form-control" id="loginPassword" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Login</button>
+                </form>
+                <p class="text-center mt-2" style="font-size: 0.9rem; color: #7f8c8d;">
+                    Don't have an account? 
+                    <a href="#" onclick="toggleForms(); return false;" style="color: #3498db; text-decoration: none;">Register</a>
+                </p>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" class="hidden">
+                <h3 class="mb-2">Register</h3>
+                <div id="registerError" style="color: #e74c3c; font-size: 0.9rem; margin-bottom: 1rem; display: none;"></div>
+                <form onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" class="form-control" id="registerUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" class="form-control" id="registerEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" class="form-control" id="registerPassword" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Register</button>
+                </form>
+                <p class="text-center mt-2" style="font-size: 0.9rem; color: #7f8c8d;">
+                    Already have an account? 
+                    <a href="#" onclick="toggleForms(); return false;" style="color: #3498db; text-decoration: none;">Login</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        redirectIfAuthenticated();
+
+        function toggleForms() {
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            
+            loginForm.classList.toggle('hidden');
+            registerForm.classList.toggle('hidden');
+            
+            document.getElementById('loginError').style.display = 'none';
+            document.getElementById('registerError').style.display = 'none';
+        }
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+            
+            try {
+                const data = await login(username, password);
+                
+                saveAuth(data.token, {
+                    userId: data.userId,
+                    username: data.username,
+                    email: data.email
+                });
+                
+                window.location.href = 'dashboard.html';
+                
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        async function handleRegister(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const errorDiv = document.getElementById('registerError');
+            
+            try {
+                const data = await register(username, email, password);
+                
+                saveAuth(data.token, {
+                    userId: data.userId,
+                    username: data.username,
+                    email: data.email
+                });
+                
+                window.location.href = 'dashboard.html';
+                
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>

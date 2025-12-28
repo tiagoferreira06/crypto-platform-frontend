@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio - Crypto Platform</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="navbar-brand">Crypto Platform</div>
+        <ul class="navbar-menu">
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="market.html">Market</a></li>
+            <li><a href="portfolio.html">Portfolio</a></li>
+            <li><a href="watchlist.html">Watchlist</a></li>
+            <li><a href="transactions.html">Transactions</a></li>
+        </ul>
+        <div class="navbar-user">
+            <span id="username"></span>
+            <button class="btn-logout" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <!-- Container -->
+    <div class="container">
+        <div class="card">
+            <div class="card-header">Portfolio</div>
+
+            <!-- Loading -->
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>Loading portfolio...</p>
+            </div>
+
+            <!-- Portfolio Table -->
+            <div id="portfolioContent" class="hidden">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Coin</th>
+                            <th>Quantity</th>
+                            <th>Avg Price</th>
+                            <th>Current Price</th>
+                            <th>Value</th>
+                            <th>Profit/Loss</th>
+                            <th>24h %</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="portfolioTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sell Modal -->
+    <div id="sellModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Sell <span id="sellCoinName"></span></h3>
+                <button class="modal-close" onclick="closeSellModal()">&times;</button>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span style="color: #7f8c8d;">Current Price:</span>
+                    <strong id="sellCurrentPrice">€0.00</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: #7f8c8d;">Available:</span>
+                    <strong id="sellAvailable">0.00000000</strong>
+                </div>
+            </div>
+
+            <form onsubmit="handleSell(event)">
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" step="0.00000001" class="form-control" id="sellQuantity" required>
+                    <small style="color: #7f8c8d; font-size: 0.85rem;">Max: <span id="sellMaxQuantity">0</span></small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Total (€)</label>
+                    <input type="text" class="form-control" id="sellTotal" readonly style="background: #f8f9fa;">
+                </div>
+                
+                <button type="submit" class="btn btn-danger btn-block">Sell Now</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        checkAuth();
+        
+        const user = getUser();
+        document.getElementById('username').textContent = user.username;
+
+        // guarda selectedCoin como variavel global
+        let selectedCoin = null;
+
+        // carrega portfolio
+        async function loadPortfolio() {
+            try {
+                const data = await getPortfolioEnriched(user.userId);
+                
+                const tableBody = document.getElementById('portfolioTable');
+                tableBody.innerHTML = '';
+                
+                if (data && data.length > 0) {
+                    data.forEach(item => {
+                        const row = document.createElement('tr');
+                        
+                        const profitLossClass = item.profitLoss >= 0 ? 'text-success' : 'text-danger';
+                        const profitLossSign = item.profitLoss >= 0 ? '+' : '';
+                        
+                        const change24hClass = item.priceChange24h >= 0 ? 'text-success' : 'text-danger';
+                        const change24hSign = item.priceChange24h >= 0 ? '+' : '';
+                        
+                        
+                        const cell1 = document.createElement('td');
+                        cell1.innerHTML = `
+                            <img src="${item.coinImage}" alt="${item.coinSymbol}" class="coin-image">
+                            <strong>${item.coinSymbol}</strong> ${item.coinName}
+                        `;
+                        
+                        const cell2 = document.createElement('td');
+                        cell2.textContent = item.quantity.toFixed(8);
+                        
+                        const cell3 = document.createElement('td');
+                        cell3.textContent = `€${item.averageBuyPrice.toFixed(2)}`;
+                        
+                        const cell4 = document.createElement('td');
+                        cell4.textContent = `€${item.currentPrice.toFixed(2)}`;
+                        
+                        const cell5 = document.createElement('td');
+                        cell5.innerHTML = `<strong>€${item.currentValue.toFixed(2)}</strong>`;
+                        
+                        const cell6 = document.createElement('td');
+                        cell6.className = profitLossClass;
+                        cell6.innerHTML = `
+                            ${profitLossSign}€${item.profitLoss.toFixed(2)}
+                            <small>(${profitLossSign}${item.profitLossPercentage.toFixed(2)}%)</small>
+                        `;
+                        
+                        const cell7 = document.createElement('td');
+                        cell7.className = change24hClass;
+                        cell7.textContent = `${change24hSign}${item.priceChange24h.toFixed(2)}%`;
+                        
+                        const cell8 = document.createElement('td');
+                        const sellBtn = document.createElement('button');
+                        sellBtn.className = 'btn btn-danger btn-sm';
+                        sellBtn.textContent = 'Sell';
+                        
+                        // cria objeto com todas as propriedades necessarias
+                        const coinData = {
+                            id: item.coinId || '',
+                            symbol: item.coinSymbol || '',
+                            name: item.coinName || '',
+                            image: item.coinImage || '',
+                            currentPrice: item.currentPrice || 0,
+                            quantity: item.quantity || 0
+                        };
+                        
+                        // usa setAttribute para passar o objeto como JSON
+                        sellBtn.setAttribute('data-coin', JSON.stringify(coinData));
+                        
+                        sellBtn.onclick = function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const coinJson = this.getAttribute('data-coin');
+                            try {
+                                const coin = JSON.parse(coinJson);
+                                console.log('Opening sell modal with coin:', coin);
+                                openSellModal(coin);
+                            } catch (error) {
+                                console.error('Error parsing coin data:', error);
+                                showNotification('Error opening sell modal', 'error');
+                            }
+                        };
+                        
+                        cell8.appendChild(sellBtn);
+                        
+                        row.appendChild(cell1);
+                        row.appendChild(cell2);
+                        row.appendChild(cell3);
+                        row.appendChild(cell4);
+                        row.appendChild(cell5);
+                        row.appendChild(cell6);
+                        row.appendChild(cell7);
+                        row.appendChild(cell8);
+                        
+                        tableBody.appendChild(row);
+                    });
+                } else {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">
+                                Your portfolio is empty
+                            </td>
+                        </tr>
+                    `;
+                }
+                
+                // mostrar content
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('portfolioContent').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error loading portfolio:', error);
+                document.getElementById('loading').innerHTML = `
+                    <p class="text-danger">Error loading portfolio</p>
+                `;
+            }
+        }
+
+        // abrir modelo Sell
+        function openSellModal(coin) {
+            console.log('openSellModal called with:', coin);
+            
+            // erro que tava dando ao vender moeda,
+            if (!coin) {
+                console.error('Coin is null or undefined');
+                showNotification('Invalid coin data', 'error');
+                return;
+            }
+            
+            if (!coin.symbol) {
+                console.error('Coin symbol is missing:', coin);
+                showNotification('Coin symbol is missing', 'error');
+                return;
+            }
+            
+            if (!coin.name) {
+                console.error('Coin name is missing:', coin);
+                showNotification('Coin name is missing', 'error');
+                return;
+            }
+            
+            if (!coin.currentPrice || coin.currentPrice <= 0) {
+                console.error('Invalid current price:', coin);
+                showNotification('Invalid price data', 'error');
+                return;
+            }
+            
+            // guadar selectedCoin
+            selectedCoin = {
+                id: coin.id || '',
+                symbol: coin.symbol || '',
+                name: coin.name || '',
+                image: coin.image || '',
+                currentPrice: parseFloat(coin.currentPrice) || 0,
+                quantity: parseFloat(coin.quantity) || 0
+            };
+            
+            console.log('selectedCoin set to:', selectedCoin);
+            
+            // atualizar UI do modal
+            document.getElementById('sellCoinName').textContent = selectedCoin.name;
+            document.getElementById('sellCurrentPrice').textContent = `€${selectedCoin.currentPrice.toFixed(2)}`;
+            document.getElementById('sellAvailable').textContent = selectedCoin.quantity.toFixed(8);
+            document.getElementById('sellMaxQuantity').textContent = selectedCoin.quantity.toFixed(8);
+            document.getElementById('sellQuantity').value = '';
+            document.getElementById('sellTotal').value = '';
+            document.getElementById('sellQuantity').max = selectedCoin.quantity;
+            
+            // mostrar modal
+            document.getElementById('sellModal').classList.add('active');
+            
+            // update total on quantity change
+            const quantityInput = document.getElementById('sellQuantity');
+            quantityInput.oninput = function() {
+                if (!selectedCoin) {
+                    console.error('selectedCoin is null in oninput');
+                    return;
+                }
+                const quantity = parseFloat(this.value) || 0;
+                const total = quantity * selectedCoin.currentPrice;
+                document.getElementById('sellTotal').value = `€${total.toFixed(2)}`;
+            };
+        }
+
+        // fechar o modelo Sell 
+        function closeSellModal() {
+            document.getElementById('sellModal').classList.remove('active');
+            // limpar form
+            document.getElementById('sellQuantity').value = '';
+            document.getElementById('sellTotal').value = '';
+            // não limpar a selectedcoin logo
+            setTimeout(() => {
+                selectedCoin = null;
+                console.log('selectedCoin cleared');
+            }, 200);
+        }
+
+        // Venda da moeda
+        async function handleSell(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            console.log('handleSell called, selectedCoin:', selectedCoin);
+            
+            // validaçao, para ver se a moeda nao ta null 
+            if (!selectedCoin) {
+                console.error('selectedCoin is null in handleSell');
+                showNotification('No coin selected', 'error');
+                return;
+            }
+            
+            if (!selectedCoin.symbol) {
+                console.error('selectedCoin.symbol is missing:', selectedCoin);
+                showNotification('Coin symbol is missing', 'error');
+                return;
+            }
+            
+            const quantityInput = document.getElementById('sellQuantity');
+            const quantity = parseFloat(quantityInput.value);
+            
+            if (!quantity || quantity <= 0) {
+                showNotification('Invalid quantity', 'error');
+                return;
+            }
+            
+            if (quantity > selectedCoin.quantity) {
+                showNotification('Insufficient quantity', 'error');
+                return;
+            }
+            
+            try {
+                console.log('Calling sellTransaction with:', {
+                    userId: user.userId,
+                    coinId: selectedCoin.id,
+                    coinSymbol: selectedCoin.symbol,
+                    coinName: selectedCoin.name,
+                    quantity: quantity,
+                    pricePerCoin: selectedCoin.currentPrice
+                });
+                
+                await sellTransaction(
+                    user.userId,
+                    selectedCoin.id,
+                    selectedCoin.symbol,
+                    selectedCoin.name,
+                    quantity,
+                    selectedCoin.currentPrice,
+                    'Sold from portfolio'
+                );
+                
+                showNotification(`Successfully sold ${quantity} ${selectedCoin.symbol}!`, 'success');
+                closeSellModal();
+                
+                // reload no portfolio dps de 300ms
+                setTimeout(() => {
+                    loadPortfolio();
+                }, 300);
+                
+            } catch (error) {
+                console.error('Sell error:', error);
+                showNotification(error.message || 'Failed to sell', 'error');
+            }
+        }
+
+        // mostrar notificaçao
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `position: fixed; top: 20px; right: 20px; background: ${type === 'success' ? '#27ae60' : '#e74c3c'}; color: white; padding: 1rem 1.5rem; border-radius: 4px; z-index: 9999; box-shadow: 0 2px 10px rgba(0,0,0,0.2);`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        // fechar modelo sell quando clicar fora da area
+        window.onclick = function(event) {
+            const modal = document.getElementById('sellModal');
+            if (event.target === modal) {
+                closeSellModal();
+            }
+        }
+
+        
+        loadPortfolio();
+    </script>
+</body>
+</html>

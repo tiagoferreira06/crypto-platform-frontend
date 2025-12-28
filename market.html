@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market - Crypto Platform</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="navbar-brand">Crypto Platform</div>
+        <ul class="navbar-menu">
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="market.html">Market</a></li>
+            <li><a href="portfolio.html">Portfolio</a></li>
+            <li><a href="watchlist.html">Watchlist</a></li>
+            <li><a href="transactions.html">Transactions</a></li>
+        </ul>
+        <div class="navbar-user">
+            <span id="username"></span>
+            <button class="btn-logout" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <!-- Container -->
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <span>Market</span>
+                <select id="limitSelect" onchange="changeLimit()" style="padding: 0.5rem; border-radius: 4px; border: 1px solid #dfe6e9; font-size: 0.9rem;">
+                    <option value="10">Top 10</option>
+                    <option value="25">Top 25</option>
+                    <option value="50">Top 50</option>
+                </select>
+            </div>
+
+            <!-- Loading -->
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>Loading market data...</p>
+            </div>
+
+            <!-- Market Table -->
+            <div id="marketContent" class="hidden">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Coin</th>
+                            <th>Price</th>
+                            <th>24h %</th>
+                            <th>Market Cap</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="marketTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Buy Modal -->
+    <div id="buyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Buy <span id="buyCoinName"></span></h3>
+                <button class="modal-close" onclick="closeBuyModal()">&times;</button>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span style="color: #7f8c8d;">Current Price:</span>
+                    <strong id="buyCurrentPrice">€0.00</strong>
+                </div>
+            </div>
+
+            <form onsubmit="handleQuickBuy(event)">
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" step="0.00000001" class="form-control" id="buyQuantity" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Total (€)</label>
+                    <input type="text" class="form-control" id="buyTotal" readonly style="background: #f8f9fa;">
+                </div>
+                
+                <button type="submit" class="btn btn-success btn-block">Buy Now</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        checkAuth();
+        
+        const user = getUser();
+        document.getElementById('username').textContent = user.username;
+
+        let currentLimit = 10;
+        let selectedCoin = null;
+        let watchlistItems = [];
+
+        // carregar moedas do mercado
+        async function loadMarket() {
+            try {
+                document.getElementById('loading').classList.remove('hidden');
+                document.getElementById('marketContent').classList.add('hidden');
+        
+                // carrega watchlist para verificar moedas que ja estao adicionadas
+                try {
+                    watchlistItems = await getWatchlist(user.userId);
+                } catch (e) {
+                    watchlistItems = [];
+                }
+        
+                const response = await fetch(`${API_CONFIG.BASE_URL}/crypto/top?limit=${currentLimit}`);
+                const data = await response.json();
+        
+                console.log('Market data:', data); // Debug
+        
+                const tableBody = document.getElementById('marketTable');
+                tableBody.innerHTML = '';
+        
+                if (data && data.length > 0) {
+                    data.forEach((coin, index) => {
+                        const row = document.createElement('tr');
+                
+                        // aceitar tanto camelCase quanto snakecase
+                        const currentPrice = coin.currentPrice || coin.current_price || 0;
+                        const priceChange24h = coin.priceChangePercentage24h || coin.price_change_percentage_24h || 0;
+                        const marketCap = coin.marketCap || coin.market_cap || 0;
+                        const marketCapRank = coin.marketCapRank || coin.market_cap_rank || index + 1;
+                        const coinId = coin.id || '';
+                        const coinSymbol = coin.symbol || '';
+                        const coinName = coin.name || '';
+                        const coinImage = coin.image || '';
+                
+                        const change24hClass = priceChange24h >= 0 ? 'text-success' : 'text-danger';
+                        const change24hSign = priceChange24h >= 0 ? '+' : '';
+                
+                        const isInWatchlist = watchlistItems.some(w => w.coinId === coinId);
+                
+                     
+                        const cell1 = document.createElement('td');
+                        cell1.innerHTML = `<strong>${marketCapRank}</strong>`;
+                
+                        const cell2 = document.createElement('td');
+                        cell2.innerHTML = `
+                            <img src="${coinImage}" alt="${coinSymbol}" class="coin-image">
+                            <strong>${coinSymbol.toUpperCase()}</strong> ${coinName}
+                        `;
+                
+                        const cell3 = document.createElement('td');
+                        cell3.innerHTML = `<strong>€${currentPrice.toFixed(2)}</strong>`;
+                
+                        const cell4 = document.createElement('td');
+                        cell4.className = change24hClass;
+                        cell4.textContent = `${change24hSign}${priceChange24h.toFixed(2)}%`;
+                
+                        const cell5 = document.createElement('td');
+                        cell5.textContent = `€${formatNumber(marketCap)}`;
+                
+                        const cell6 = document.createElement('td');
+                
+                        // guardar moeda
+                        const normalizedCoin = {
+                            id: coinId,
+                            symbol: coinSymbol.toUpperCase(),
+                            name: coinName,
+                            image: coinImage,
+                            currentPrice: currentPrice
+                        };
+                
+                        // Botao de comprar
+                        const buyBtn = document.createElement('button');
+                        buyBtn.className = 'btn btn-success btn-sm';
+                        buyBtn.textContent = 'Buy';
+                        buyBtn.style.marginRight = '0.3rem';
+                        buyBtn.onclick = function() {
+                            openBuyModal(normalizedCoin);
+                        };
+                
+                        // botao da watchlist
+                        const watchBtn = document.createElement('button');
+                        watchBtn.className = 'btn btn-primary btn-sm';
+                        watchBtn.textContent = isInWatchlist ? 'In Watchlist' : 'Watch';
+                        if (isInWatchlist) {
+                            watchBtn.disabled = true;
+                            watchBtn.style.background = '#95a5a6';
+                            watchBtn.style.cursor = 'not-allowed';
+                        }
+                        watchBtn.onclick = function() {
+                            addToWatchlistQuick(coinId, coinSymbol.toUpperCase(), coinName);
+                        };
+                
+                        cell6.appendChild(buyBtn);
+                        cell6.appendChild(watchBtn);
+                
+                        row.appendChild(cell1);
+                        row.appendChild(cell2);
+                        row.appendChild(cell3);
+                        row.appendChild(cell4);
+                        row.appendChild(cell5);
+                        row.appendChild(cell6);
+                
+                        tableBody.appendChild(row);
+                    });
+                } else {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">No market data available</td>
+                        </tr>
+                    `;
+                }
+        
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('marketContent').classList.remove('hidden');
+        
+            } catch (error) {
+                console.error('Error loading market:', error);
+                document.getElementById('loading').innerHTML = `
+                    <p class="text-danger">Error: ${error.message}</p>
+                `;
+            }
+        }
+
+        
+        function changeLimit() {
+            currentLimit = parseInt(document.getElementById('limitSelect').value);
+            loadMarket();
+        }
+
+        // formatar numero 
+        function formatNumber(num) {
+            if (num >= 1000000000) {
+                return (num / 1000000000).toFixed(2) + 'B';
+            } else if (num >= 1000000) {
+                return (num / 1000000).toFixed(2) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(2) + 'K';
+            }
+            return num.toFixed(2);
+        }
+
+        // abrir modelo buy
+        function openBuyModal(coin) {
+            if (!coin || !coin.symbol || !coin.name) {
+                console.error('Invalid coin data:', coin);
+                return;
+            }
+            
+            selectedCoin = coin;
+            
+            document.getElementById('buyCoinName').textContent = coin.name;
+            document.getElementById('buyCurrentPrice').textContent = `€${coin.currentPrice.toFixed(2)}`;
+            document.getElementById('buyQuantity').value = '';
+            document.getElementById('buyTotal').value = '';
+            
+            document.getElementById('buyModal').classList.add('active');
+            
+            // Update total on quantity change
+            document.getElementById('buyQuantity').oninput = function() {
+                if (!selectedCoin) return;
+                const quantity = parseFloat(this.value) || 0;
+                const total = quantity * selectedCoin.currentPrice;
+                document.getElementById('buyTotal').value = `€${total.toFixed(2)}`;
+            };
+        }
+
+        // fechar modelo buy
+        function closeBuyModal() {
+            document.getElementById('buyModal').classList.remove('active');
+            // limpar o form
+            document.getElementById('buyQuantity').value = '';
+            document.getElementById('buyTotal').value = '';
+           
+            setTimeout(() => {
+                selectedCoin = null;
+            }, 100);
+        }
+
+        // Quick Buy da moeda
+        async function handleQuickBuy(event) {
+            event.preventDefault();
+            
+            if (!selectedCoin) {
+                showNotification('No coin selected', 'error');
+                return;
+            }
+            
+            const quantity = document.getElementById('buyQuantity').value;
+            
+            try {
+                await buyTransaction(
+                    user.userId,
+                    selectedCoin.id,
+                    selectedCoin.symbol,
+                    selectedCoin.name,
+                    quantity,
+                    selectedCoin.currentPrice,
+                    'Bought from market'
+                );
+                
+                closeBuyModal();
+                showNotification(`Successfully bought ${quantity} ${selectedCoin.symbol}!`, 'success');
+                
+            } catch (error) {
+                console.error('Buy error:', error);
+                showNotification(error.message, 'error');
+            }
+        }
+
+        // adicionar na watchlist
+        async function addToWatchlistQuick(coinId, coinSymbol, coinName) {
+            try {
+                if (!coinId || !coinSymbol || !coinName) {
+                    console.error('Invalid coin data');
+                    return;
+                }
+        
+                await addToWatchlist(user.userId, coinId, coinSymbol, coinName);
+                showNotification(`${coinSymbol} added to watchlist!`, 'success');
+                loadMarket(); // Reload to update button state
+            } catch (error) {
+                console.error('Watchlist error:', error);
+                showNotification('Failed to add to watchlist', 'error');
+            }
+        }
+
+        
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `position: fixed; top: 20px; right: 20px; background: ${type === 'success' ? '#27ae60' : '#e74c3c'}; color: white; padding: 1rem 1.5rem; border-radius: 4px; z-index: 9999; box-shadow: 0 2px 10px rgba(0,0,0,0.2);`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        // fechar modelo quando clicar fora
+        window.onclick = function(event) {
+            const modal = document.getElementById('buyModal');
+            if (event.target === modal) {
+                closeBuyModal();
+            }
+        }
+
+        
+        loadMarket();
+        
+        // refresh a cada 30 seg para estar sempre atualizado
+        setInterval(loadMarket, 30000);
+    </script>
+</body>
+</html>

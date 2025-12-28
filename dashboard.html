@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Crypto Platform</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="navbar-brand">Crypto Platform</div>
+        <ul class="navbar-menu">
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="market.html">Market</a></li>
+            <li><a href="portfolio.html">Portfolio</a></li>
+            <li><a href="watchlist.html">Watchlist</a></li>
+            <li><a href="transactions.html">Transactions</a></li>
+        </ul>
+        <div class="navbar-user">
+            <span id="username"></span>
+            <button class="btn-logout" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <!-- Container -->
+    <div class="container">
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading dashboard...</p>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboardContent" class="hidden">
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Invested</div>
+                    <div class="stat-value" id="totalInvested">€0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Current Value</div>
+                    <div class="stat-value" id="currentValue">€0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Profit/Loss</div>
+                    <div class="stat-value" id="profitLoss">€0.00</div>
+                    <div class="stat-change" id="profitLossPercent">0.00%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Coins</div>
+                    <div class="stat-value" id="totalCoins">0</div>
+                </div>
+            </div>
+
+            <!-- Top Holdings -->
+            <div class="card">
+                <div class="card-header">Top Holdings</div>
+                <div id="emptyState" class="text-center text-muted" style="padding: 2rem;">
+                    No holdings yet. Start by buying some crypto!
+                </div>
+                <table class="table" id="holdingsTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>Coin</th>
+                            <th>Quantity</th>
+                            <th>Current Price</th>
+                            <th>Value</th>
+                            <th>Profit/Loss</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topHoldingsTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        checkAuth();
+        
+        const user = getUser();
+        document.getElementById('username').textContent = user.username;
+
+        // load na dashboard
+        async function loadDashboard() {
+            try {
+                const data = await getDashboard(user.userId);
+                
+                // update stats do user
+                document.getElementById('totalInvested').textContent = `€${data.totalInvested.toFixed(2)}`;
+                document.getElementById('currentValue').textContent = `€${data.currentValue.toFixed(2)}`;
+                document.getElementById('profitLoss').textContent = `€${data.profitLoss.toFixed(2)}`;
+                document.getElementById('totalCoins').textContent = data.totalCoins;
+                
+                // update na cor do profit/loss
+                const profitLossElem = document.getElementById('profitLoss');
+                const profitLossPercentElem = document.getElementById('profitLossPercent');
+                
+                if (data.profitLoss >= 0) {
+                    profitLossElem.style.color = '#27ae60';
+                    profitLossPercentElem.textContent = `+${data.profitLossPercentage.toFixed(2)}%`;
+                    profitLossPercentElem.className = 'stat-change positive';
+                } else {
+                    profitLossElem.style.color = '#e74c3c';
+                    profitLossPercentElem.textContent = `${data.profitLossPercentage.toFixed(2)}%`;
+                    profitLossPercentElem.className = 'stat-change negative';
+                }
+                
+                // update tabela top holdings
+                const tableBody = document.getElementById('topHoldingsTable');
+                tableBody.innerHTML = '';
+                
+                if (data.topHoldings && data.topHoldings.length > 0) {
+                    document.getElementById('emptyState').style.display = 'none';
+                    document.getElementById('holdingsTable').style.display = 'table';
+                    
+                    data.topHoldings.forEach(holding => {
+                        const row = document.createElement('tr');
+                        
+                        const profitLossClass = holding.profitLoss >= 0 ? 'text-success' : 'text-danger';
+                        const profitLossSign = holding.profitLoss >= 0 ? '+' : '';
+                        
+                        row.innerHTML = `
+                            <td>
+                                <img src="${holding.coinImage}" alt="${holding.coinSymbol}" class="coin-image">
+                                <strong>${holding.coinSymbol}</strong> ${holding.coinName}
+                            </td>
+                            <td>${holding.quantity.toFixed(8)}</td>
+                            <td>€${holding.currentPrice.toFixed(2)}</td>
+                            <td><strong>€${holding.currentValue.toFixed(2)}</strong></td>
+                            <td class="${profitLossClass}">
+                                ${profitLossSign}€${holding.profitLoss.toFixed(2)}
+                                <small>(${profitLossSign}${holding.profitLossPercentage.toFixed(2)}%)</small>
+                            </td>
+                        `;
+                        
+                        tableBody.appendChild(row);
+                    });
+                }
+                
+                // mostrar content
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('dashboardContent').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                document.getElementById('loading').innerHTML = `
+                    <p class="text-danger">Error loading dashboard</p>
+                `;
+            }
+        }
+
+        // carregar a dashboard
+        loadDashboard();
+    </script>
+</body>
+</html>
